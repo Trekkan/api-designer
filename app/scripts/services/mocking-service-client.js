@@ -2,90 +2,90 @@
   'use strict';
 
   angular.module('ramlEditorApp')
-    .service('mockingServiceClient', function mockingServiceClientFactory($http, $q, $window, resolveUri) {
+    .service('mockingServiceClient', function mockingServiceClientFactory(
+      $http,
+      $q,
+      $window,
+      $rootScope,
+      resolveUri
+    ) {
       var self = this;
+      var SEPARATOR = '/';
 
       self.proxy   = null;
-      // self.baseUri = 'http://mocksvc.mulesoft.com';
-      self.baseUri = 'http://ec2-52-201-242-128.compute-1.amazonaws.com';
+      self.baseUri = 'https://qax.anypoint.mulesoft.com/mocking/api/v1';
+      self.legacyBaseUri = 'https://mocksvc.mulesoft.com';
 
-      self.buildURL = function buildURL() {
-        var url   = self.baseUri + ['/mocks'].concat(Array.prototype.slice.call(arguments, 0)).join('/');
+      function mockingIds() {
+        var regExp = /^#\/organizations\/([A-Za-z0-9-]+)\/dashboard\/apis\/([0-9-]+)\/versions\/([0-9-]+).*$/;
+        var match = $window.location.hash.match(regExp);
+
+        if (match === null || !match[1] || !match[2] || !match[3]) {
+          return [];
+        }
+
+        return match.slice(1);
+      }
+
+      self.buildMockingService1Url = function buildMockingService2Url() {
+        return self.legacyBaseUri + ['/mocks'].concat(Array.prototype.slice.call(arguments, 0)).join('/');
+      };
+
+      self.buildMockingService2Url = function buildMockingService2Url() {
+        var args = ['sources', 'manager', 'apis'].concat(mockingIds()).concat(Array.prototype.slice.call(arguments, 0));
+        return self.baseUri + SEPARATOR + args.join(SEPARATOR);
+      };
+
+      self.buildURL = function buildURL(url) {
+        var completeUrl = url ? url : self.buildMockingService2Url();
         var proxy = self.proxy || $window.RAML.Settings.proxy;
 
         if (proxy) {
-          url = proxy + resolveUri(url);
+          completeUrl = proxy + resolveUri(completeUrl);
         }
 
-        return url;
+        return completeUrl;
       };
 
-      function cleanBaseUri(mock) {
-        var baseUri       = mock.baseUri;
-        var mocksQuantity = baseUri.match(/mocks\//g).length;
-
-        if (mocksQuantity > 1) {
-          var mocks = 'mocks/';
-
-          for (var i = mocksQuantity; i > 1; i--) {
-            var from  = baseUri.indexOf(mocks);
-            var to    = baseUri.indexOf('/', from + mocks.length);
-            baseUri   = baseUri.substring(0, from) + baseUri.substring(to + 1, baseUri.length);
-          }
-
+      function getToken() {
+        try {
+          return JSON.parse(localStorage.user).token || '';
+        } catch (e) {
+          return '';
         }
-        mock.baseUri = baseUri;
       }
 
-      self.simplifyMock = function simplifyMock(mock) {
-        if (mock.baseUri) { cleanBaseUri(mock); }
-
+      function customHeader(file) {
         return {
-          id:        mock.id,
-          baseUri:   mock.baseUri,
-          manageKey: mock.manageKey
+          'MS2-Authorization': getToken(),
+          'MS2-Main-File': encodeURI((file && file.name) || ''),
+          'MS2-Origin': 'API Designer Legacy'
         };
+      }
+
+      self.enableMock = function createMock(file) {
+        return $http.post(self.buildURL(this.buildMockingService2Url('link')), null, {headers: customHeader(file)})
+          .then(function (mock) {
+            const mockId = mock.data.id;
+            return $http.get(self.buildURL(), { headers: customHeader(file) })
+              .then(function (mockMetadata) {
+                var baseUriPath = mockMetadata.data && mockMetadata.data.metadata && mockMetadata.data.metadata.baseUriPath;
+                return self.baseUri + '/links/' + mockId  + baseUriPath;
+              });
+          });
       };
 
-      self.getMock = function getMock(mock) {
-        return $http.get(self.buildURL(mock.id, mock.manageKey)).then(
-          function success(response) {
-            return self.simplifyMock(response.data);
-          },
-
-          function failure(response) {
-            if (response.status === 404) {
-              return;
-            }
-
-            return $q.reject(response);
-          }
-        );
+      self.deleteMock = function deleteMock(file) {
+        return $http.delete(self.buildURL(), { headers: customHeader(file) });
       };
 
-      self.createMock = function createMock(mock) {
-        return $http.post(self.buildURL(), mock).then(
-          function success(response) {
-            return self.simplifyMock(response.data);
-          }
-        );
+      self.deleteMock1 = function deleteMock1(mock) {
+        return $http.delete(self.buildURL(self.buildMockingService1Url(), mock.id, mock.manageKey));
       };
 
-      self.updateMock = function updateMock(mock) {
-        return $http({
-          method: 'PATCH',
-          url:    self.buildURL(mock.id, mock.manageKey),
-          data:   {raml: mock.raml, json: mock.json}
-        }).then(
-          function success(response) {
-            return self.simplifyMock(angular.extend(mock, response.data));
-          }
-        );
-      };
-
-      self.deleteMock = function deleteMock(mock) {
-        return $http.delete(self.buildURL(mock.id, mock.manageKey));
-      };
+      $rootScope.$on('event:evict-mocking', function(event, file) {
+        self.deleteMock(file);
+      });
     })
   ;
 })();

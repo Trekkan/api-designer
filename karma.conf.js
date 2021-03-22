@@ -3,6 +3,8 @@
 
 'use strict';
 
+process.env.CHROME_BIN = require('puppeteer').executablePath();
+
 module.exports = function(config) {
   config.set({
     // base path, that will be used to resolve files and exclude
@@ -79,8 +81,8 @@ module.exports = function(config) {
     },
 
     coverageReporter: {
-      type: "lcov",
-      dir: "coverage/"
+      type: 'lcov',
+      dir: 'coverage/'
     },
 
     // web server port
@@ -104,7 +106,14 @@ module.exports = function(config) {
     // - Safari (only Mac)
     // - PhantomJS
     // - IE (only Windows)
-    browsers: ['PhantomJS'],
+    browsers: ['ChromeHeadlessNoSandbox'],
+
+    customLaunchers: {
+      ChromeHeadlessNoSandbox: {
+        base: 'ChromeHeadless',
+        flags: ['--no-sandbox']
+      }
+    },
 
     // If browser does not capture in given timeout [ms], kill it
     captureTimeout: 120000,

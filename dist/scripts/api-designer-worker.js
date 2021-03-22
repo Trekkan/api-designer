@@ -19,10 +19,12 @@ function RamlExpander() {
     if (expandedType) {
       for (var key in expandedType) {
         if (expandedType.hasOwnProperty(key)) {
-          if (['example', 'examples'].includes(key) && valueHasExamples) {
-            continue;
+          if ((key === 'example' || key === 'examples') && valueHasExamples) { continue; }
+          if (key === 'properties') { // can have extra properties
+            value[key] = Object.assign(value.properties || {}, expandedType[key]);
+          } else {
+            value[key] = expandedType[key];
           }
-          value[key] = expandedType[key];
         }
       }
     }
@@ -39,10 +41,7 @@ function RamlExpander() {
   }
 
   function extractArrayType(arrayNode) {
-    if (arrayNode.items.type) {
-      return arrayNode.items.type[0];
-    }
-    return arrayNode.items;
+    return arrayNode.items && arrayNode.items.type ? arrayNode.items.type[0] : arrayNode.items;
   }
 
   function isNotObject(value) {
@@ -53,14 +52,10 @@ function RamlExpander() {
     jsTraverse.traverse(raml).forEach(function (value) {
       if (this.path.slice(-2).join('.') === 'body.application/json' && value.type && value.type[0] === 'array') {
         var type = extractArrayType(value);
-        if (isNotObject(value.items)) {
-          value.items = {};
-        }
+        if (isNotObject(value.items)) { value.items = {}; }
         replaceTypeIfExists(raml, type, value.items);
 
-        if (!value.examples && !value.example) {
-          generateArrayExampleIfPossible(value);
-        }
+        if (!value.examples && !value.example) { generateArrayExampleIfPossible(value); }
       }
     });
 
@@ -205,6 +200,8 @@ if (self.importScripts && self.location.hash) {
   if (self.location.host.indexOf('localhost:9013') > -1) {
     // dev dependencies to parser
     self.importScripts(
+      '/bower_components/js-polyfills/polyfill.js',
+      '/bower_components/promise-polyfill/promise.min.js',
       '/bower_components/raml-1-parser/raml-json-validation.js',
       '/bower_components/raml-1-parser/raml-xml-validation.js',
       '/bower_components/raml-1-parser/raml-1-parser.js',
@@ -249,7 +246,7 @@ if (self.importScripts && self.location.hash) {
             // console.timeEnd(type);
             return post(type + '-resolve', result);
           })
-          .catch(function(error) {
+          .catch(function (error) {
             postReject(type, error);
           });
       } catch (e) {
@@ -288,7 +285,7 @@ if (self.importScripts && self.location.hash) {
     });
   };
 
-  var ramlParser = new RamlParser(requestFilePromise, workerParameters.proxy );
+  var ramlParser = new RamlParser(requestFilePromise, workerParameters.proxy);
 
   listenThenPost('ramlParse', function (data) {
     return ramlParser.parse(data.path);

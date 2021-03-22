@@ -4,7 +4,9 @@
   angular.module('ramlEditorApp')
     .controller('mockingServiceController', function mockingServiceControllerFactory(
       $scope,
+      $rootScope,
       mockingService,
+      mockingServiceClient,
       codeMirror,
       getNode
     ) {
@@ -13,13 +15,13 @@
           codeMirror.setLine($scope.editor, lineNumber, (prefix || '') + $scope.editor.getLine(lineNumber) + '\n' + line);
         }
 
-        var baseUri = 'baseUri: ' + $scope.mock.baseUri;
+        var baseUri = 'baseUri: ' + $rootScope.mock;
         var node    = getNode($scope.editor, 0);
 
         // try to find `baseUri` line
         while (node) {
           if (node.getKey() === 'baseUri') {
-            if (node.getValue().text !== $scope.mock.baseUri) {
+            if (node.getValue().text !== $rootScope.mock) {
               setLine(node.lineNumber, baseUri, '#');
             }
             return;
@@ -40,8 +42,7 @@
         setLine(0, baseUri);
       }
 
-      function removeBaseUri() {
-        var baseUriLine = 'baseUri: ' + $scope.mock.baseUri;
+      function removeBaseUri(baseUriLine) {
         var lineNumber  = void(0);
         var line        = void(0);
 
@@ -76,52 +77,64 @@
       }
 
       function setMock(mock) {
-        $scope.mock    = mock;
-        $scope.enabled = !!mock;
+        $rootScope.mock    = mock;
+        $rootScope.enabled = !!mock;
       }
 
       function getMock() {
         loading(mockingService.getMock($scope.fileBrowser.selectedFile)
           .then(setMock)
           .then(function() {
-            if ($scope.mock) { addBaseUri(); }
+            if ($rootScope.mock) { addBaseUri(); }
           })
         );
       }
 
-      function createMock() {
-        loading(mockingService.createMock($scope.fileBrowser.selectedFile, $scope.fileBrowser.selectedFile.raml)
+      function enableMock(isLegacyMockingMigration) {
+        loading(mockingService.enableMock($scope.fileBrowser.selectedFile)
           .then(setMock)
           .then(addBaseUri)
-        );
-      }
-
-      function updateMock() {
-        mockingService.updateMock($scope.fileBrowser.selectedFile, $scope.fileBrowser.selectedFile.raml)
-          .then(setMock)
-        ;
-      }
-
-      function deleteMock() {
-        loading(mockingService.deleteMock($scope.fileBrowser.selectedFile)
-          .then(function () {
-            removeBaseUri();
+          .then(function mockMigrated() {
+            if (isLegacyMockingMigration) {
+              $rootScope.mockMigrated = true;
+            }
           })
-          .then(setMock)
         );
       }
 
-      $scope.toggleMockingService = function toggleMockingService() {
+      function deleteMock(isLegacyMockingMigration) {
+        var deleteMockPromise = isLegacyMockingMigration ?
+          mockingService.deleteMock1($scope.fileBrowser.selectedFile) :
+          mockingService.deleteMock($scope.fileBrowser.selectedFile);
+
+        var baseUri = isLegacyMockingMigration ? 'baseUri: ' + $scope.raml.baseUri : 'baseUri: ' + $rootScope.mock;
+
+        loading(
+          deleteMockPromise
+            .then(function () {
+              removeBaseUri(baseUri);
+            })
+            .then(setMock)
+        );
+      }
+
+      $scope.toggleMockingService = function toggleMockingService(isLegacyMockingMigration) {
         if (!$scope.fileBrowser.selectedFile) {
           return;
         }
 
-        if ($scope.enabled) {
+        if (isLegacyMockingMigration) {
+          deleteMock(isLegacyMockingMigration);
+          enableMock(isLegacyMockingMigration);
+          return;
+        }
+
+        if ($rootScope.enabled) {
           deleteMock();
           return;
         }
 
-        createMock();
+        enableMock();
       };
 
       $scope.$watch('fileBrowser.selectedFile', function watch(newValue) {
@@ -129,12 +142,6 @@
           getMock();
         } else {
           setMock();
-        }
-      });
-
-      $scope.$watch('fileBrowser.selectedFile.raml', function watch() {
-        if ($scope.enabled) {
-          updateMock();
         }
       });
     })

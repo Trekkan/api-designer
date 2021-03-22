@@ -9,6 +9,9 @@
     ) {
       var editor, lineOfCurrentError, currentFile;
 
+      $rootScope.mockMigrated = false;
+      $scope.mockingMigratedDismissed = false;
+
       function extractCurrentFileLabel(file) {
         var label = '';
         if (file) {
@@ -172,6 +175,10 @@
                   var raml = api.specification;
                   $rootScope.$broadcast('event:raml-parsed', raml);
                 }
+
+                $('.CodeMirror').each(function(i, el){
+                  el.CodeMirror.refresh();
+                });
               }
             })).catch(
               // unexpected failure
@@ -291,6 +298,24 @@
 
       $scope.getIsMockingServiceVisible = function getIsMockingServiceVisible() {
         return !($scope.mockingServiceDisabled || !$scope.fileParsable);
+      };
+
+      $scope.getIsMockingService1 = function getIsMockingServiceVisible() {
+        if (!$scope.raml || !$scope.raml.baseUri || $scope.mockingMigratedDismissed) {
+          return false;
+        }
+
+        var mockingServiceDetector = /(?:mocksvc\.[a-z\.]*)mulesoft\.com(\/(.*))?/;
+        var isBaseUriOfMocking1 = mockingServiceDetector.exec($scope.raml.baseUri);
+        return isBaseUriOfMocking1 !== null;
+      };
+
+      $scope.getIsMigrationSuccessful = function getIsMigrationSuccessful() {
+        return $rootScope.mockMigrated && !$scope.mockingMigratedDismissed;
+      };
+
+      $scope.closeMigrationHint = function closeMigrationHing() {
+        $scope.mockingMigratedDismissed = true;
       };
 
       $scope.getIsShelfVisible = function getIsShelfVisible() {

@@ -582,11 +582,17 @@
        * @return {boolean}
        */
       function validateFileType (file) {
-        if (file.type) {
-          return (/\text|image|raml|json|yaml|xml|xsd|zip$/i).test(file.type);
+        // attempt mime-type
+        var validFileTypes = $window.RAML.Settings.customValidFileTypes || 'text|image|raml|json|yaml|xml|xsd|zip';
+        var validateFileTypesRegExp = new RegExp(validFileTypes, 'i');
+        if (file.type && validateFileTypesRegExp.test(file.type)) {
+          return true;
         }
 
-        return (/\.raml|.json|.yaml|.yml|.xml|.xsd|.md|.txt|.jpg|.jpeg|.png|.html|.zip$/i).test(file.name);
+        // fallback to file extension...
+        var validFileExtensions = $window.RAML.Settings.customValidFileExtensions || '\.raml|\.json|\.yaml|\.yml|\.xml|\.xsd|\.jsd|\.md|\.txt|\.jpg|\.jpeg|\.png|\.html|\.csv|\.properties|\.zip$';
+        var validateFileExtensionRegExp = new RegExp(validFileExtensions, 'i');
+        return validateFileExtensionRegExp.test(file.name);
       }
 
       /**
